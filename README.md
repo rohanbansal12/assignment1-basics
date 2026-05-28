@@ -1,10 +1,32 @@
-# CS336 Spring 2025 Assignment 1: Basics
+# CS336 Assignment 1: Basics
 
-For a full description of the assignment, see the assignment handout at
-[cs336_assignment1_basics.pdf](./cs336_assignment1_basics.pdf)
+This repository is my independent, self-study walkthrough of the CS336
+Assignment 1 "Basics" project. I am working through it separately from the
+class, so this repo is not aimed at Gradescope submission or the course
+leaderboard.
 
-If you see any issues with the assignment handout or code, please feel free to
-raise a GitHub issue or open a pull request with a fix.
+For the original assignment description, see
+[cs336_assignment1_basics.pdf](./cs336_assignment1_basics.pdf).
+
+## Status
+
+All core code implementations are complete:
+
+- Byte-level BPE tokenizer training and encoding/decoding
+- Transformer language model components
+- Cross-entropy, gradient clipping, AdamW, LR schedule, checkpointing
+- Tokenized data loading
+- Decoding/generation utilities
+- Training script scaffold for experiments
+
+The local test suite currently passes:
+
+```sh
+uv run pytest tests/
+```
+
+The repo is ready to run TinyStories/OpenWebText experiments and ablations on a
+GPU instance using the tokenized datasets and training script.
 
 ## Setup
 
@@ -26,9 +48,8 @@ and the environment will be automatically solved and activated when necessary.
 uv run pytest
 ```
 
-Initially, all tests should fail with `NotImplementedError`s.
-To connect your implementation to the tests, complete the
-functions in [./tests/adapters.py](./tests/adapters.py).
+The adapters in [./tests/adapters.py](./tests/adapters.py) are wired to the
+local implementations.
 
 ### Download data
 Download the TinyStories data and a subsample of OpenWebText
@@ -48,3 +69,24 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+## Running Experiments
+
+After downloading the raw datasets, train/tokenize with the BPE utilities in
+`cs336_basics/bpe.py` and `scripts/tokenizer_experiments.py`, then train a
+language model with:
+
+```sh
+uv run python scripts/train_lm.py \
+  --train-tokens-path out/tinystories_train_tokens.npy \
+  --valid-tokens-path out/tinystories_valid_tokens.npy \
+  --checkpoint-path out/checkpoints/tinystories.pt \
+  --vocab-size 10000 \
+  --device cuda
+```
+
+Use `--help` to see model, optimizer, logging, evaluation, checkpoint, and
+resume options:
+
+```sh
+uv run python scripts/train_lm.py --help
+```
