@@ -9,6 +9,9 @@ import pickle
 import heapq
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+PAT_RE = re.compile(PAT)
+BYTE_TOKENS = tuple(bytes([i]) for i in range(256))
+_SPECIAL_PATTERN_CACHE = {}
 NUM_PROCESSES = 12
 
 
@@ -25,7 +28,7 @@ def train_bpe(
 
 
 def _init_vocab(special_tokens: list[str]) -> dict[int, bytes]:
-    vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
+    vocab: dict[int, bytes] = {i: BYTE_TOKENS[i] for i in range(256)}
     seen: set[bytes] = set(vocab.values())
 
     for token in special_tokens:
@@ -35,6 +38,18 @@ def _init_vocab(special_tokens: list[str]) -> dict[int, bytes]:
             seen.add(token_bytes)
 
     return vocab
+
+
+def _get_special_pattern(special_tokens: list[str]):
+    if not special_tokens:
+        return None
+
+    key = tuple(sorted(special_tokens, key=len, reverse=True))
+    special_pattern = _SPECIAL_PATTERN_CACHE.get(key)
+    if special_pattern is None:
+        special_pattern = re.compile("|".join(re.escape(token) for token in key))
+        _SPECIAL_PATTERN_CACHE[key] = special_pattern
+    return special_pattern
 
 
 def _pretokenize_chunk(
@@ -49,19 +64,17 @@ def _pretokenize_chunk(
         data = f.read(end - start)
     text = data.decode("utf-8", errors="ignore")
 
-    if special_tokens:
-        special_tokens = sorted(special_tokens, key=len, reverse=True)
-        special_pattern = "|".join(re.escape(token) for token in special_tokens)
-        segments = re.split(special_pattern, text)
-    else:
-        segments = [text]
+    special_pattern = _get_special_pattern(special_tokens)
+    segments = special_pattern.split(text) if special_pattern is not None else [text]
 
     counts = Counter()
     for segment in segments:
-        for match in re.finditer(PAT, segment):
+        if not segment:
+            continue
+        for match in PAT_RE.finditer(segment):
             pretoken_str = match.group(0)
             pretoken_bytes = pretoken_str.encode("utf-8")
-            pretoken_tuple = tuple(bytes([b]) for b in pretoken_bytes)
+            pretoken_tuple = tuple(BYTE_TOKENS[b] for b in pretoken_bytes)
             counts[pretoken_tuple] += 1
     return counts
 
@@ -326,7 +339,7 @@ def train_bpe_openweb():
 
     input_path = repo_dir / "data" / "owt_train.txt"
     vocab_size = 32000
-    special_tokens = []
+    special_tokens = ["<|endoftext|>"]
 
     t = time.time()
     vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
@@ -347,6 +360,6 @@ def train_bpe_openweb():
 
 
 if __name__ == "__main__":
-    ## train_bpe_tinystories()
+    train_bpe_tinystories()
 
     train_bpe_openweb()
